@@ -27,6 +27,36 @@ class Access:
     def supply(self, supply: Supply):
         self._supply = supply
 
+    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1):
+        # First we join the destinations
+        with_dest = self.cost.data.reset_index().set_index(self.cost._to_id)
+        with_dest = with_dest.join(self.supply.data, how="right")
+
+        if isinstance(supply_columns, str):
+            supply_columns = [supply_columns]
+
+        columns = []
+
+        for c in supply_columns:
+            # Keep only columns with actual destinations
+            this_column = with_dest[with_dest[c] > 0]
+
+            result = (
+                this_column[[self.cost._from_id, cost_column, c]]
+                .groupby(self.cost._from_id)
+                .apply(get_nth, o=c, n=n, cost=cost_column)
+            )
+            columns.append(result)
+
+        if len(columns) > 1:
+            final = pandas.concat(columns, axis="columns", join="outer")
+        else:
+            final = columns[0]
+
+        final.columns = supply_columns
+
+        return final
+
     def cumulative_cutoff(
         self, cost_columns: list[str], cutoffs: list[float], use_destination=True
     ) -> pandas.DataFrame:
@@ -63,3 +93,10 @@ class Access:
 
         # Group and return
         return df[self.supply.columns].groupby(group_column).sum()
+
+
+def get_nth(df, o, n, cost):
+    df = df.sort_values(by=cost, ascending=True, na_position="last")
+    df["_cumsum"] = df[o].cumsum()
+    df = df[df["_cumsum"] >= n]
+    return df[cost].min()

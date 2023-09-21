@@ -5,4 +5,7 @@ cost = Cost.from_csv("docs/source/_static/data/test_data_1_costs.csv", from_id="
 
 access = Access(supply, cost)
 
-print(access.cumulative_cutoff(access.cost.columns, [29, 2]))
+df = access.cost_to_closest(cost_column="c", supply_columns=["oj", "oj2"], n=1)
+
+
+print(df)
