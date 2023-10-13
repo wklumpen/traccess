@@ -34,9 +34,7 @@ class AccessComputer:
     def supply(self, supply: Supply):
         self._supply = supply
 
-    def cost_to_closest(
-        self, cost_column: str, supply_columns: list[str], n=1
-    ) -> pandas.DataFrame:
+    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> pandas.DataFrame:
         """Compute the cost to the nth closest destination.
 
         This function is generic over any kind of numeric travel cost, such as
@@ -77,29 +75,27 @@ class AccessComputer:
             )
             columns.append(result)
 
-        if len(columns) > 1:
-            final = pandas.concat(columns, axis="columns", join="outer")
-        else:
-            final = columns[0]
+        final = pandas.concat(columns, axis="columns", join="outer")
 
         final.columns = supply_columns
 
-        return final
+        final = final.reset_index()
 
-    def cumulative_cutoff(
-        self,
-        cost_columns: list[str],
-        cutoffs: list[float],
-        use_origin=False,
-    ) -> Access:
-        """Compute the total number of opportunities within a specified travel cost cutoff.
+        return Access(final, id_column=self.cost._from_id)
+
+    def cumulative_cutoff(self, cost_columns: list[str], cutoffs: list[float]) -> Access:
+        """Compute the total number of opportunities within a specified travel
+        cost cutoff.
 
         Parameters
         ----------
         cost_columns : list[str]
-            A list of cost columns to apply cutoffs to. Can be a single string for a single column.
+            A list of cost columns to apply cutoffs to. Can be a single string
+            for a single column.
         cutoffs : list[float]
-            A list of cutoff values corresponding to each cost column. Can be a single value for a single cutoff column. Must be the same length as `cost_columns`
+            A list of cutoff values corresponding to each cost column. Can be a
+            single value for a single cutoff column. Must be the same length as
+            `cost_columns`.
 
         Returns
         -------
@@ -132,9 +128,7 @@ class AccessComputer:
             df["_weights"] = numpy.where(df[c] <= cutoffs[idx], df["_weights"], 0)
 
         # Multily all opportunities by the weights
-        df[self.supply.columns] = df[self.supply.columns].multiply(
-            df["_weights"], axis="index"
-        )
+        df[self.supply.columns] = df[self.supply.columns].multiply(df["_weights"], axis="index")
         # Set the group columns
         df.index.rename(join_column, inplace=True)
         df.reset_index(inplace=True)
@@ -186,9 +180,7 @@ class EquityComputer:
         df = self.access.data.join(self.demographic.data)
         return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
-    def fgt(
-        self, access_column: str, poverty_line: float, alpha: float
-    ) -> pandas.Series:
+    def fgt(self, access_column: str, poverty_line: float, alpha: float) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
         FGT measures consider the average amount of poverty in a given
@@ -229,9 +221,7 @@ class EquityComputer:
         df = df[df["_delta"] > 0]
         df["_delta"] = df["_delta"] / poverty_line
         df["_delta"] = df["_delta"].pow(alpha)
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(
-            df["_delta"], axis="index"
-        )
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(df["_delta"], axis="index")
         totals = df[self.demographic.columns].sum().rename("count")
         totals = pandas.concat([totals, n], axis="columns")
         totals["fgt"] = totals["count"] / totals["n"]
@@ -256,9 +246,7 @@ class EquityComputer:
         for c in self.demographic.columns:
             df[c] = df[c] / df[c].sum()
         # Multiply and sum
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(
-            df[access_column], axis="index"
-        )
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(df[access_column], axis="index")
         return df[self.demographic.columns].sum()
 
 

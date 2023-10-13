@@ -6,14 +6,14 @@ demographics = Demographic.from_csv("docs/source/_static/data/test_data_1_demogr
 
 ac = AccessComputer(supply, cost)
 
-access = ac.cumulative_cutoff(cost_columns=["c"], cutoffs=[20])
+access = ac.cost_to_closest(cost_column="c", supply_columns=["oj2"], n=2)
 
 print(access.data)
 
-ec = EquityComputer(access, demographics)
+# ec = EquityComputer(access, demographics)
 
-# print(ec.fgt(access_column="oj", poverty_line=10.0, alpha=1))
+# # print(ec.fgt(access_column="oj", poverty_line=10.0, alpha=1))
 
-wa = ec.weighted_average(access_column="oj")
+# wa = ec.weighted_average(access_column="oj")
 
-print(wa.loc["li"] / wa.loc["total"])
+# print(wa.loc["li"] / wa.loc["total"])
