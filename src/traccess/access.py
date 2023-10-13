@@ -37,7 +37,8 @@ class AccessComputer:
     def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> pandas.DataFrame:
         """Compute the cost to the nth closest destination.
 
-        This function is generic over any kind of numeric travel cost, such as distance, time and money.
+        This function is generic over any kind of numeric travel cost, such as
+        distance, time and money.
 
         Parameters
         ----------
@@ -52,6 +53,7 @@ class AccessComputer:
         -------
         pandas.DataFrame
             A dataframe containing travel times to the nth closest destination
+            for each origin
         """
         # First we join the destinations
         with_dest = self.cost.data.reset_index().set_index(self.cost._to_id)
@@ -69,7 +71,7 @@ class AccessComputer:
             result = (
                 this_column[[self.cost._from_id, cost_column, c]]
                 .groupby(self.cost._from_id)
-                .apply(get_nth, o=c, n=n, cost=cost_column)
+                .apply(_get_nth, o=c, n=n, cost=cost_column)
             )
             columns.append(result)
 
@@ -161,6 +163,21 @@ class EquityComputer:
         return self._demographic
 
     def in_poverty(self, access_column: str, poverty_line: float) -> pandas.Series:
+        """Compute the number of individuals in poverty in any given demographic.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to compare the poverty line to
+        poverty_line : float
+            The poverty line
+
+        Returns
+        -------
+        pandas.Series
+            A series with each row consisting of a demogrphic group, containing
+            the number of that group in poverty.
+        """
         # Count the number of people in poverty
         df = self.access.data.join(self.demographic.data)
         return df[df[access_column] < poverty_line][self.demographic.columns].sum()
@@ -213,7 +230,7 @@ class EquityComputer:
         return totals["fgt"]
 
 
-def get_nth(df, o, n, cost):
+def _get_nth(df, o, n, cost):
     df = df.sort_values(by=cost, ascending=True, na_position="last")
     df["_cumsum"] = df[o].cumsum()
     df = df[df["_cumsum"] >= n]
