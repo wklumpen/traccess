@@ -12,4 +12,8 @@ print(access.data)
 
 ec = EquityComputer(access, demographics)
 
-print(ec.fgt(access_column="oj", poverty_line=10.0, alpha=1))
+# print(ec.fgt(access_column="oj", poverty_line=10.0, alpha=1))
+
+wa = ec.weighted_average(access_column="oj")
+
+print(wa.loc["li"] / wa.loc["total"])

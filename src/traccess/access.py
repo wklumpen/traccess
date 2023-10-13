@@ -229,6 +229,15 @@ class EquityComputer:
         totals["fgt"] = totals["count"] / totals["n"]
         return totals["fgt"]
 
+    def weighted_average(self, access_column: str):
+        df = self.access.data.join(self.demographic.data)
+        # Normalize the population columns
+        for c in self.demographic.columns:
+            df[c] = df[c] / df[c].sum()
+        # Multiply and sum
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(df[access_column], axis="index")
+        return df[self.demographic.columns].sum()
+
 
 def _get_nth(df, o, n, cost):
     df = df.sort_values(by=cost, ascending=True, na_position="last")
