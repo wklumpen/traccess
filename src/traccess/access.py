@@ -34,7 +34,9 @@ class AccessComputer:
     def supply(self, supply: Supply):
         self._supply = supply
 
-    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> pandas.DataFrame:
+    def cost_to_closest(
+        self, cost_column: str, supply_columns: list[str], n=1
+    ) -> pandas.DataFrame:
         """Compute the cost to the nth closest destination.
 
         This function is generic over any kind of numeric travel cost, such as
@@ -130,7 +132,9 @@ class AccessComputer:
             df["_weights"] = numpy.where(df[c] <= cutoffs[idx], df["_weights"], 0)
 
         # Multily all opportunities by the weights
-        df[self.supply.columns] = df[self.supply.columns].multiply(df["_weights"], axis="index")
+        df[self.supply.columns] = df[self.supply.columns].multiply(
+            df["_weights"], axis="index"
+        )
         # Set the group columns
         df.index.rename(join_column, inplace=True)
         df.reset_index(inplace=True)
@@ -182,7 +186,9 @@ class EquityComputer:
         df = self.access.data.join(self.demographic.data)
         return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
-    def fgt(self, access_column: str, poverty_line: float, alpha: float) -> pandas.Series:
+    def fgt(
+        self, access_column: str, poverty_line: float, alpha: float
+    ) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
         FGT measures consider the average amount of poverty in a given
@@ -223,19 +229,36 @@ class EquityComputer:
         df = df[df["_delta"] > 0]
         df["_delta"] = df["_delta"] / poverty_line
         df["_delta"] = df["_delta"].pow(alpha)
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(df["_delta"], axis="index")
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(
+            df["_delta"], axis="index"
+        )
         totals = df[self.demographic.columns].sum().rename("count")
         totals = pandas.concat([totals, n], axis="columns")
         totals["fgt"] = totals["count"] / totals["n"]
         return totals["fgt"]
 
-    def weighted_average(self, access_column: str):
+    def weighted_average(self, access_column: str) -> pandas.Series:
+        """Compute the population group-weighted average access for all groups.
+
+        Parameters
+        ----------
+        access_column : str
+            The access value to weight
+
+        Returns
+        -------
+        pandas.Series
+            A series with a row for demographic group, with the weighted average
+            access.
+        """
         df = self.access.data.join(self.demographic.data)
         # Normalize the population columns
         for c in self.demographic.columns:
             df[c] = df[c] / df[c].sum()
         # Multiply and sum
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(df[access_column], axis="index")
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(
+            df[access_column], axis="index"
+        )
         return df[self.demographic.columns].sum()
 
 
