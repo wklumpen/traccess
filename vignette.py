@@ -1,11 +1,15 @@
-from traccess import Supply, Cost, Access
+from traccess import Supply, Cost, AccessComputer, Demographic, EquityComputer
 
 supply = Supply.from_csv("docs/source/_static/data/test_data_1_supply.csv", id_column="dd")
 cost = Cost.from_csv("docs/source/_static/data/test_data_1_costs.csv", from_id="o", to_id="d")
+demographics = Demographic.from_csv("docs/source/_static/data/test_data_1_demographics.csv", id_column="dd")
 
-access = Access(supply, cost)
+ac = AccessComputer(supply, cost)
 
-df = access.cost_to_closest(cost_column="c", supply_columns=["oj", "oj2"], n=1)
+access = ac.cumulative_cutoff(cost_columns=["c"], cutoffs=[20])
 
+print(access.data)
 
-print(df)
+ec = EquityComputer(access, demographics)
+
+print(ec.fgt(access_column="oj", poverty_line=10.0, alpha=1))

@@ -2,7 +2,7 @@ import pathlib
 import pandas
 import pytest
 
-from traccess import Supply, Cost, Access
+from traccess import Supply, Cost, AccessComputer
 
 DATA_DIRECTORY = pathlib.Path(__file__).resolve().parent.parent / "docs" / "source" / "_static" / "data"
 
@@ -34,5 +34,5 @@ def supply_csv_filepath():
 def access_object():
     supply = Supply.from_csv(SUPPLY_CSV, SUPPLY_ID_COLUMN)
     cost = Cost.from_csv(COSTS_CSV, COSTS_FROM_ID_COLUMN, COSTS_TO_ID_COLUMN)
-    access = Access(supply, cost)
+    access = AccessComputer(supply, cost)
     yield access
