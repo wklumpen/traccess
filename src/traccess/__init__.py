@@ -2,5 +2,5 @@
 
 __version__ = "0.0.1"
 
-from .data import Cost, Demographic, Supply
+from .data import Cost, Demographic, Supply, Access
 from .access import AccessComputer, EquityComputer

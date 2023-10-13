@@ -142,6 +142,9 @@ class AccessComputer:
             id_column=group_column,
         )
 
+    def cumulative_decay(self, cost_columns: list[str], decay_function) -> Access:
+        pass
+
 
 class EquityComputer:
     def __init__(self, access: Access, demographic: Demographic):
@@ -180,7 +183,7 @@ class EquityComputer:
         df = self.access.data.join(self.demographic.data)
         return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
-    def fgt(self, access_column: str, poverty_line: float, alpha: float) -> pandas.Series:
+    def fgt_poverty(self, access_column: str, poverty_line: float, alpha: float) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
         FGT measures consider the average amount of poverty in a given

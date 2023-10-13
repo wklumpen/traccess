@@ -37,9 +37,9 @@ class AbstractDataSet(ABC):
             columns = self._data.columns
 
         for c in columns:
-            self._data[c] = (self._data[c] - self._data[c].min()) / (
-                self._data[c].max() - self._data[c].min()
-            ) * (max - min) + min
+            self._data[c] = (self._data[c] - self._data[c].min()) / (self._data[c].max() - self._data[c].min()) * (
+                max - min
+            ) + min
 
     @classmethod
     def from_csv(cls, csv_filepath, id_column="id", **kwargs):
@@ -80,6 +80,11 @@ class AbstractMatrix(ABC):
     @classmethod
     def from_csv(cls, csv_filepath, from_id="i", to_id="j", **kwargs):
         dataframe = pandas.read_csv(csv_filepath, **kwargs)
+        return cls(dataframe, from_id, to_id)
+
+    @classmethod
+    def from_parquet(cls, parquet_filepath, from_id="i", to_id="j", **kwargs):
+        dataframe = pandas.read_parquet(parquet_filepath, **kwargs)
         return cls(dataframe, from_id, to_id)
 
 
