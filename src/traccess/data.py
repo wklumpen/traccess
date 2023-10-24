@@ -18,6 +18,10 @@ class AbstractDataSet(ABC):
     def data(self) -> pandas.DataFrame:
         return self._data
 
+    @data.setter
+    def data(self, data: pandas.DataFrame):
+        self._data = data
+
     def normalize(self, columns=None, min=0.0, max=1.0):
         """Normalize one or more columns between a range
 
@@ -62,7 +66,7 @@ class AbstractDataSet(ABC):
 
 
 class AbstractMatrix(ABC):
-    def __init__(self, dataframe: pandas.DataFrame, from_id="i", to_id="j") -> None:
+    def __init__(self, dataframe: pandas.DataFrame, from_id="from_id", to_id="to_id") -> None:
         self._data = dataframe
         self._data.set_index([from_id, to_id], inplace=True)
 
@@ -93,7 +97,42 @@ class Access(AbstractDataSet):
 
 
 class Cost(AbstractMatrix):
-    pass
+    def quantile(self, quantile: float, use_to_id=False) -> pandas.DataFrame:
+        """Compute the quantile cost values across all origins or destinations
+
+        Parameters
+        ----------
+        quantile : float
+            The quantile to compute (0 to 1)
+        use_to_id : bool, optional
+            If true, group by the destination column instead of the origin, by default False
+
+        Returns
+        -------
+        pandas.DataFrame
+            A dataframe with an index for each id and the quantile value
+        """
+        if use_to_id:
+            return self.data.groupby(self._to_id).quantile(quantile)
+        else:
+            return self.data.groupby(self._from_id).quantile(quantile)
+
+    def median(self, use_to_id=False) -> pandas.DataFrame:
+        """Compute the median cost values across all origins or destinations.
+
+        This function is a shorthand for `Cost.quantile(quantile=0.5)`
+
+        Parameters
+        ----------
+        use_to_id : bool, optional
+            If true, group by the destination column instead of the origin, by default False
+
+        Returns
+        -------
+        pandas.DataFrame
+            A dataframe with an index for each id and a median value
+        """
+        return self.quantile(0.5, use_to_id)
 
 
 class Demand(AbstractDataSet):

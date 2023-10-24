@@ -34,7 +34,7 @@ class AccessComputer:
     def supply(self, supply: Supply):
         self._supply = supply
 
-    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> pandas.DataFrame:
+    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> Access:
         """Compute the cost to the nth closest destination.
 
         This function is generic over any kind of numeric travel cost, such as
@@ -51,9 +51,8 @@ class AccessComputer:
 
         Returns
         -------
-        pandas.DataFrame
-            A dataframe containing travel times to the nth closest destination
-            for each origin
+        Access
+            An Access data object with an `id_column` matching the origin zone.
         """
         # First we join the destinations
         with_dest = self.cost.data.reset_index().set_index(self.cost._to_id)
@@ -83,7 +82,9 @@ class AccessComputer:
 
         return Access(final, id_column=self.cost._from_id)
 
-    def cumulative_cutoff(self, cost_columns: list[str], cutoffs: list[float]) -> Access:
+    def cumulative_cutoff(
+        self, cost_columns: list[str], cutoffs: list[float], supply_columns: list[str] = None
+    ) -> Access:
         """Compute the total number of opportunities within a specified travel
         cost cutoff.
 
@@ -96,6 +97,9 @@ class AccessComputer:
             A list of cutoff values corresponding to each cost column. Can be a
             single value for a single cutoff column. Must be the same length as
             `cost_columns`.
+        supply_columns : list[str]
+            An optional list of supply columns to use and return. If None, all
+            supply columns are used. By default, None.
 
         Returns
         -------
@@ -109,8 +113,10 @@ class AccessComputer:
         """
         if isinstance(cost_columns, str):
             cost_columns = [cost_columns]
-        if isinstance(cutoffs, float):
+        if isinstance(cutoffs, float) or isinstance(cutoffs, int):
             cutoffs = [cutoffs]
+        if isinstance(supply_columns, str):
+            supply_columns = [supply_columns]
 
         if len(cost_columns) != len(cutoffs):
             raise ValueError("Cost and cutoff columns must be the same length")
@@ -120,22 +126,26 @@ class AccessComputer:
 
         # Set the join index and join
         df = self.cost.data.reset_index().set_index(join_column)
-        df = df.join(self.supply.data)
+
+        if supply_columns is None:
+            supply_columns = self.supply.columns
+
+        df = df.join(self.supply.data[supply_columns])
 
         df["_weights"] = 1.0
         # Iterate through the columns and update weights based on columns
         for idx, c in enumerate(cost_columns):
             df["_weights"] = numpy.where(df[c] <= cutoffs[idx], df["_weights"], 0)
 
+        # print(df)
         # Multily all opportunities by the weights
-        df[self.supply.columns] = df[self.supply.columns].multiply(df["_weights"], axis="index")
+        df[supply_columns] = df[supply_columns].multiply(df["_weights"], axis="index")
         # Set the group columns
         df.index.rename(join_column, inplace=True)
         df.reset_index(inplace=True)
-
         # Group and return
         columns = [group_column]
-        columns.extend(self.supply.columns)
+        columns.extend(supply_columns)
         access_df = df[columns].groupby(group_column).sum().reset_index()
         return Access(
             access_df,
@@ -251,6 +261,37 @@ class EquityComputer:
         # Multiply and sum
         df[self.demographic.columns] = df[self.demographic.columns].multiply(df[access_column], axis="index")
         return df[self.demographic.columns].sum()
+
+    def weighted_quantile(self, access_column: str, quantile=0.5) -> pandas.Series:
+        """Compute a population-weighted quantile for all demographics.
+
+        Population-weighted quantiles are *not interpolated*, meaning that the
+        values returned by this function are the highest value in the dataset
+        not exceeding the quantile value.
+
+        Parameters
+        ----------
+        access_column : str
+            The column to compute the quantile over
+        quantile : float, optional
+            The quantile to use, by default 0.5
+
+        Returns
+        -------
+        pandas.Series
+            A series containing each demographic group and the access value of
+            that quantile.
+        """
+        df = self.access.data.join(self.demographic.data)
+        df.sort_values(access_column, inplace=True)
+
+        result = dict()
+        for c in self.demographic.columns:
+            total_weight = df[c].sum()
+            df["_cumulative"] = df[c].cumsum()
+            result[c] = df[df["_cumulative"] <= (total_weight) * quantile][access_column].iloc[-1]
+
+        return pandas.Series(result, name=f"q{int(quantile * 100)}")
 
 
 def _get_nth(df, o, n, cost):
