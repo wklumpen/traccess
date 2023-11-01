@@ -240,6 +240,32 @@ class EquityComputer:
         totals["fgt"] = totals["count"] / totals["n"]
         return totals["fgt"]
 
+    def poverty_index(self, access_column: str, poverty_line: float) -> pandas.Series:
+        """Compute the poverty index at each location.
+
+        This method computes the poverty index for each location, which is the
+        difference between the poverty line and the supplied access value,
+        divided by the poverty line.
+
+        Values above the poverty line are returned as null values.
+
+        Parameters
+        ----------
+        access_column : str
+            The column to compare the poverty line to
+        poverty_line : float
+            The poverty line value for access
+
+        Returns
+        -------
+        pandas.Series
+            A pandas Series containing the poverty index for each location
+        """
+        df = self.access.data.copy()
+        df["poverty_index"] = (poverty_line - df[access_column]) / poverty_line
+        df["poverty_index"] = numpy.where(df.poverty_index < 0, pandas.NA, df.poverty_index)
+        return df["poverty_index"]
+
     def weighted_average(self, access_column: str) -> pandas.Series:
         """Compute the population group-weighted average access for all groups.
 
