@@ -6,6 +6,8 @@ from .data import Cost, Demand, Demographic, Supply, Access
 
 
 class AccessComputer:
+    """Compute access to destinations."""
+
     def __init__(
         self,
         supply: Supply,
@@ -34,7 +36,9 @@ class AccessComputer:
     def supply(self, supply: Supply):
         self._supply = supply
 
-    def cost_to_closest(self, cost_column: str, supply_columns: list[str], n=1) -> Access:
+    def cost_to_closest(
+        self, cost_column: str, supply_columns: list[str], n=1
+    ) -> Access:
         """Compute the cost to the nth closest destination.
 
         This function is generic over any kind of numeric travel cost, such as
@@ -83,7 +87,10 @@ class AccessComputer:
         return Access(final, id_column=self.cost._from_id)
 
     def cumulative_cutoff(
-        self, cost_columns: list[str], cutoffs: list[float], supply_columns: list[str] = None
+        self,
+        cost_columns: list[str],
+        cutoffs: list[float],
+        supply_columns: list[str] = None,
     ) -> Access:
         """Compute the total number of opportunities within a specified travel
         cost cutoff.
@@ -157,7 +164,23 @@ class AccessComputer:
 
 
 class EquityComputer:
+    """Compute distributive equity across population demograhics"""
+
     def __init__(self, access: Access, demographic: Demographic):
+        """Compute distributive equity metrics across population demographics
+
+        An EquityComputer allows for the combination of access measures and
+        demographic data to compute various metrics of distributive equity or
+        transportation justice.
+
+        Parameters
+        ----------
+        access : Access
+            An `Access` object which contains data on access to opportunities.
+        demographic : Demographic
+            A `Demographic` data object which contains data on demographics and
+            populations
+        """
         self._access = access
         self._demographic = demographic
 
@@ -193,7 +216,9 @@ class EquityComputer:
         df = self.access.data.join(self.demographic.data)
         return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
-    def fgt_poverty(self, access_column: str, poverty_line: float, alpha: float) -> pandas.Series:
+    def fgt_poverty(
+        self, access_column: str, poverty_line: float, alpha: float
+    ) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
         FGT measures consider the average amount of poverty in a given
@@ -234,7 +259,9 @@ class EquityComputer:
         df = df[df["_delta"] > 0]
         df["_delta"] = df["_delta"] / poverty_line
         df["_delta"] = df["_delta"].pow(alpha)
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(df["_delta"], axis="index")
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(
+            df["_delta"], axis="index"
+        )
         totals = df[self.demographic.columns].sum().rename("count")
         totals = pandas.concat([totals, n], axis="columns")
         totals["fgt"] = totals["count"] / totals["n"]
@@ -263,7 +290,9 @@ class EquityComputer:
         """
         df = self.access.data.copy()
         df["poverty_index"] = (poverty_line - df[access_column]) / poverty_line
-        df["poverty_index"] = numpy.where(df.poverty_index < 0, pandas.NA, df.poverty_index)
+        df["poverty_index"] = numpy.where(
+            df.poverty_index < 0, pandas.NA, df.poverty_index
+        )
         return df["poverty_index"]
 
     def weighted_average(self, access_column: str) -> pandas.Series:
@@ -285,7 +314,9 @@ class EquityComputer:
         for c in self.demographic.columns:
             df[c] = df[c] / df[c].sum()
         # Multiply and sum
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(df[access_column], axis="index")
+        df[self.demographic.columns] = df[self.demographic.columns].multiply(
+            df[access_column], axis="index"
+        )
         return df[self.demographic.columns].sum()
 
     def weighted_quantile(self, access_column: str, quantile=0.5) -> pandas.Series:
@@ -315,7 +346,9 @@ class EquityComputer:
         for c in self.demographic.columns:
             total_weight = df[c].sum()
             df["_cumulative"] = df[c].cumsum()
-            result[c] = df[df["_cumulative"] <= (total_weight) * quantile][access_column].iloc[-1]
+            result[c] = df[df["_cumulative"] <= (total_weight) * quantile][
+                access_column
+            ].iloc[-1]
 
         return pandas.Series(result, name=f"q{int(quantile * 100)}")
 

@@ -41,9 +41,9 @@ class AbstractDataSet(ABC):
             columns = self._data.columns
 
         for c in columns:
-            self._data[c] = (self._data[c] - self._data[c].min()) / (self._data[c].max() - self._data[c].min()) * (
-                max - min
-            ) + min
+            self._data[c] = (self._data[c] - self._data[c].min()) / (
+                self._data[c].max() - self._data[c].min()
+            ) * (max - min) + min
 
     @classmethod
     def from_csv(cls, csv_filepath, id_column="id", **kwargs):
@@ -66,7 +66,9 @@ class AbstractDataSet(ABC):
 
 
 class AbstractMatrix(ABC):
-    def __init__(self, dataframe: pandas.DataFrame, from_id="from_id", to_id="to_id") -> None:
+    def __init__(
+        self, dataframe: pandas.DataFrame, from_id="from_id", to_id="to_id"
+    ) -> None:
         self._data = dataframe
         self._data.set_index([from_id, to_id], inplace=True)
 
