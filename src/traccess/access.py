@@ -13,15 +13,28 @@ class AccessComputer:
         supply: Supply,
         cost: Cost,
         demand: Demand = None,
-        demographic: Demographic = None,
     ):
+        """Compute access to opportunity metrics.
+
+        The access computer uses supplied datasets on supply, cost, and
+        optionally demand to compute popular access to opportunity measures.
+
+        Parameters
+        ----------
+        supply : Supply
+            The supply or destination set to compute access to
+        cost : Cost
+            A matrix of cost values (travel time, other cost, etc)
+        demand : Demand, optional
+            The demand for destinations, used for competitive measures
+        """
         self._supply = supply
         self._cost = cost
         self._demand = demand
-        self._demographic = demographic
 
     @property
     def cost(self) -> Cost:
+        """Access or set the cost object"""
         return self._cost
 
     @cost.setter
@@ -30,6 +43,7 @@ class AccessComputer:
 
     @property
     def supply(self):
+        """Access or set the supply object"""
         return self._supply
 
     @supply.setter
