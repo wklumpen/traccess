@@ -15,7 +15,7 @@ class AbstractDataSet(ABC):
     """
 
     def __init__(self, dataframe: pandas.DataFrame, id_column="id"):
-        self._data = dataframe
+        self._data = dataframe.copy()
         self._data.set_index(id_column, inplace=True)
 
         self._id = id_column
@@ -91,7 +91,7 @@ class AbstractMatrix(ABC):
     def __init__(
         self, dataframe: pandas.DataFrame, from_id="from_id", to_id="to_id"
     ) -> None:
-        self._data = dataframe
+        self._data = dataframe.copy()
         self._data.set_index([from_id, to_id], inplace=True)
 
         self._from_id = from_id

@@ -28,6 +28,14 @@ class AccessComputer:
         demand : Demand, optional
             The demand for destinations, used for competitive measures
         """
+        if not isinstance(supply, Supply):
+            raise TypeError(
+                "The supply must be of type Supply. Check the order of arguments passed."
+            )
+        if not isinstance(cost, Cost):
+            raise TypeError(
+                "The cost must be of type Cost. Check the order of arguments passed."
+            )
         self._supply = supply
         self._cost = cost
         self._demand = demand
@@ -158,7 +166,6 @@ class AccessComputer:
         for idx, c in enumerate(cost_columns):
             df["_weights"] = numpy.where(df[c] <= cutoffs[idx], df["_weights"], 0)
 
-        # print(df)
         # Multily all opportunities by the weights
         df[supply_columns] = df[supply_columns].multiply(df["_weights"], axis="index")
         # Set the group columns
@@ -204,13 +211,21 @@ class EquityComputer:
 
     @access.setter
     def access(self, access: Access):
+        assert isinstance(access, Access)
         self._access = access
 
     @property
     def demographic(self) -> Demographic:
         return self._demographic
 
-    def in_poverty(self, access_column: str, poverty_line: float) -> pandas.Series:
+    @demographic.setter
+    def demographic(self, demographic: Demographic):
+        assert isinstance(demographic, Demographic)
+        self._demographic = demographic
+
+    def in_poverty(
+        self, access_column: str, poverty_line: float, is_dual=False
+    ) -> pandas.Series:
         """Compute the number of individuals in poverty in any given demographic.
 
         Parameters
@@ -219,6 +234,9 @@ class EquityComputer:
             The access column to compare the poverty line to
         poverty_line : float
             The poverty line
+        is_dual: bool, optional
+            Whether the measure is a dual measure, where lower values are
+            better, by default False
 
         Returns
         -------
@@ -228,10 +246,13 @@ class EquityComputer:
         """
         # Count the number of people in poverty
         df = self.access.data.join(self.demographic.data)
-        return df[df[access_column] < poverty_line][self.demographic.columns].sum()
+        if is_dual == True:
+            df[df[access_column] > poverty_line][self.demographic.columns].sum()
+        else:
+            return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
     def fgt_poverty(
-        self, access_column: str, poverty_line: float, alpha: float
+        self, access_column: str, poverty_line: float, alpha: float, is_dual=False
     ) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
@@ -256,6 +277,9 @@ class EquityComputer:
         alpha : float
             The alpha parameter, or the extent which to weight those further
             below the poverty line
+        is_dual: bool, optional
+            Whether the measure is a dual measure, where lower values are
+            better, by default False
 
         Returns
         -------
@@ -268,8 +292,12 @@ class EquityComputer:
         # Keep the total of each population group
         n = self.demographic.data.sum().rename("n")
 
-        df["_delta"] = poverty_line - df[access_column]
-        # We only do the math the set of those in poverty
+        if is_dual == True:
+            df["_delta"] = df[access_column] - poverty_line
+        else:
+            df["_delta"] = poverty_line - df[access_column]
+
+        # We only do the math on the set of those in poverty
         df = df[df["_delta"] > 0]
         df["_delta"] = df["_delta"] / poverty_line
         df["_delta"] = df["_delta"].pow(alpha)
@@ -279,9 +307,12 @@ class EquityComputer:
         totals = df[self.demographic.columns].sum().rename("count")
         totals = pandas.concat([totals, n], axis="columns")
         totals["fgt"] = totals["count"] / totals["n"]
-        return totals["fgt"]
 
-    def poverty_index(self, access_column: str, poverty_line: float) -> pandas.Series:
+        return totals["fgt"].rename(f"fgt{alpha}")
+
+    def poverty_index(
+        self, access_column: str, poverty_line: float, is_dual=False
+    ) -> pandas.Series:
         """Compute the poverty index at each location.
 
         This method computes the poverty index for each location, which is the
@@ -296,6 +327,9 @@ class EquityComputer:
             The column to compare the poverty line to
         poverty_line : float
             The poverty line value for access
+        is_dual: bool, optional
+            Whether the measure is a dual measure, where lower values are
+            better, by default False
 
         Returns
         -------
@@ -303,7 +337,10 @@ class EquityComputer:
             A pandas Series containing the poverty index for each location
         """
         df = self.access.data.copy()
-        df["poverty_index"] = (poverty_line - df[access_column]) / poverty_line
+        if is_dual == True:
+            df["poverty_index"] = (df[access_column] - poverty_line) / poverty_line
+        else:
+            df["poverty_index"] = (poverty_line - df[access_column]) / poverty_line
         df["poverty_index"] = numpy.where(
             df.poverty_index < 0, pandas.NA, df.poverty_index
         )
@@ -333,7 +370,9 @@ class EquityComputer:
         )
         return df[self.demographic.columns].sum()
 
-    def weighted_quantile(self, access_column: str, quantile=0.5) -> pandas.Series:
+    def weighted_quantile(
+        self, access_column: str, quantile=0.5, is_dual=False
+    ) -> pandas.Series:
         """Compute a population-weighted quantile for all demographics.
 
         Population-weighted quantiles are *not interpolated*, meaning that the
@@ -346,6 +385,9 @@ class EquityComputer:
             The column to compute the quantile over
         quantile : float, optional
             The quantile to use, by default 0.5
+        is_dual: bool, optional
+            Whether the measure is a dual measure, where lower values are
+            better, by default False
 
         Returns
         -------
@@ -353,6 +395,10 @@ class EquityComputer:
             A series containing each demographic group and the access value of
             that quantile.
         """
+
+        if is_dual == True:
+            quantile = 1.0 - quantile
+
         df = self.access.data.join(self.demographic.data)
         df.sort_values(access_column, inplace=True)
 
