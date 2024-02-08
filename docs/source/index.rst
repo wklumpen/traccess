@@ -31,6 +31,13 @@ Traccess is currently available via PyPI
 Computing Access to Opportunities
 ---------------------------------
 
+Computing accecss to opportunities requires both a supply (land use) source
+containing area-coded counts of locations, and a cost matrix which represents
+the cost of travel from any zone to any other.
+
+You can specify ID columns on load to use arbitrary values as origins and
+destinations.
+
 .. code-block:: python
 
    from traccess import AccessComputer, Cost, Supply
