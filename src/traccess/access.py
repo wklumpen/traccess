@@ -368,7 +368,9 @@ class EquityComputer:
         df[self.demographic.columns] = df[self.demographic.columns].multiply(
             df[access_column], axis="index"
         )
-        return df[self.demographic.columns].sum()
+        df = df[self.demographic.columns].sum()
+        df = df.rename(access_column)
+        return df
 
     def weighted_quantile(
         self, access_column: str, quantile=0.5, is_dual=False
