@@ -76,6 +76,7 @@ Computing Transport Poverty Measures
    :maxdepth: 3
    :caption: Contents:
 
+   start
    reference
 
 Indices and tables
