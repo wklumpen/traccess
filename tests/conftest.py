@@ -4,7 +4,13 @@ import pytest
 
 from traccess import Supply, Cost, AccessComputer
 
-DATA_DIRECTORY = pathlib.Path(__file__).resolve().parent.parent / "docs" / "source" / "_static" / "data"
+DATA_DIRECTORY = (
+    pathlib.Path(__file__).resolve().parent.parent
+    / "docs"
+    / "source"
+    / "_static"
+    / "data"
+)
 
 COSTS_CSV = DATA_DIRECTORY / "test_data_1_costs.csv"
 COSTS_FROM_ID_COLUMN = "o"
@@ -21,7 +27,9 @@ def cost_csv_filepath():
 
 @pytest.fixture
 def supply_dataframe():
-    df = pandas.DataFrame({"zone": [1, 2, 3, 4, 5], "employment": [200, 100, 300, 400, 250]})
+    df = pandas.DataFrame(
+        {"zone": [1, 2, 3, 4, 5], "employment": [200, 100, 300, 400, 250]}
+    )
     yield df
 
 

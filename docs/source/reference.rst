@@ -1,8 +1,8 @@
 Module Reference
 ================
 
-Computation Objects
-^^^^^^^^^^^^^^^^^^^
+Computing Objects
+^^^^^^^^^^^^^^^^^
 
 .. automodule:: traccess.access
    :members:
