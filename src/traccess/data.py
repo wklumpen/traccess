@@ -98,9 +98,9 @@ class AbstractMatrix(ABC):
         self._to_id = to_id
 
     @property
-    def columns(self) -> list:
+    def columns(self) -> pandas.Index[str]:
         """The list of columns in the dataset"""
-        return self._data.columns
+        return self.data.columns
 
     @property
     def data(self) -> pandas.DataFrame:

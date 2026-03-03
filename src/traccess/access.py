@@ -1,6 +1,6 @@
 import numpy
 import pandas
-from typing import Union
+from typing import Callable, Union
 
 from .data import Cost, Demand, Demographic, Supply, Access
 
@@ -112,7 +112,7 @@ class AccessComputer:
         self,
         cost_columns: list[str],
         cutoffs: list[float],
-        supply_columns: list[str] = None,
+        supply_columns: list[str] | None = None,
     ) -> Access:
         """Compute the total number of opportunities within a specified travel
         cost cutoff.
@@ -180,8 +180,87 @@ class AccessComputer:
             id_column=group_column,
         )
 
-    def cumulative_decay(self, cost_columns: list[str], decay_function) -> Access:
-        pass
+    def cumulative_decay(
+        self,
+        cost_columns: list[str],
+        decay_functions=Callable[[float], float] | list[Callable[[float], float]],
+        supply_columns: list[str] | None = None,
+    ) -> Access:
+        """Compute the total number of opportunities weighted by a decay function
+        applied to travel cost.
+
+        Parameters
+        ----------
+        cost_columns : list[str]
+            A list of cost columns to apply the decay function to. Can be a
+            single string for a single column.
+        decay_functions : Callable or list[Callable]
+            A decay function or list of decay functions to apply to each cost
+            column. If a single function is provided, it is applied to all cost
+            columns. If a list is provided, it must be the same length as
+            ``cost_columns``. Can be any callable, including the built-in
+            functions in ``traccess.decay``.
+        supply_columns : list[str]
+            An optional list of supply columns to use and return. If None, all
+            supply columns are used. By default, None.
+
+        Returns
+        -------
+        Access
+            An Access data object with an `id_column` matching the origin zone.
+            Result columns are named ``{supply_column}_{cost_column}`` when
+            multiple cost columns are provided, or ``{supply_column}`` when
+            only one cost column is provided.
+
+        Raises
+        ------
+        ValueError
+            If ``decay_functions`` is a list not the same length as ``cost_columns``.
+        """
+        if isinstance(cost_columns, str):
+            cost_columns = [cost_columns]
+        if callable(decay_functions):
+            decay_functions = [decay_functions] * len(cost_columns)
+
+        if len(decay_functions) != len(cost_columns):
+            raise ValueError(
+                f"decay_functions list length ({len(decay_functions)}) must match "
+                f"cost_columns length ({len(cost_columns)})"
+            )
+
+        join_column = self.cost._to_id
+        group_column = self.cost._from_id
+
+        # Set the join index and join
+        df = self.cost.data.reset_index().set_index(join_column)
+
+        if supply_columns is None:
+            supply_columns = self.supply.columns
+
+        df = df.join(self.supply.data[supply_columns])
+        df.reset_index(inplace=True)
+        df.index.rename(join_column, inplace=True)
+
+        result_df = None
+        use_suffix = len(cost_columns) > 1
+
+        for cost_col, fn in zip(cost_columns, decay_functions):
+            weights = df[cost_col].apply(fn)
+            weighted = df[supply_columns].multiply(weights, axis="index")
+
+            if use_suffix:
+                weighted = weighted.add_suffix(f"_{cost_col}")
+
+            result_cols = list(weighted.columns)
+            weighted[group_column] = df[group_column].values
+            grouped = weighted.groupby(group_column)[result_cols].sum().reset_index()
+
+            if result_df is None:
+                result_df = grouped
+            else:
+                result_df = result_df.merge(grouped, on=group_column)
+
+        return Access(result_df, id_column=group_column)
 
 
 class EquityComputer:
