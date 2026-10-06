@@ -183,7 +183,7 @@ class AccessComputer:
     def cumulative_decay(
         self,
         cost_columns: list[str],
-        decay_functions=Callable[[float], float] | list[Callable[[float], float]],
+        decay_functions: Callable[[float], float] | list[Callable[[float], float]],
         supply_columns: list[str] | None = None,
     ) -> Access:
         """Compute the total number of opportunities weighted by a decay function

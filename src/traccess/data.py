@@ -1,4 +1,6 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
+
+from abc import ABC
 
 import pandas
 
@@ -73,6 +75,25 @@ class AbstractDataSet(ABC):
         """
         dataframe = pandas.read_csv(csv_filepath, **kwargs)
         return cls(dataframe, id_column)
+
+    @classmethod
+    def from_parquet(cls, parquet_filepath, id_column='id', **kwargs):
+        """Load data and create an object from a Parquet file
+
+        Parameters
+        ----------
+        parquet_filepath : str
+            The filepath of the Parquet file to load
+        id_column : str, optional
+            The column used as the reference id, by default "id"
+
+        Returns
+        -------
+        AbstractDataSet
+            A data set object.
+        """
+        dataframe = pandas.read_parquet(parquet_filepath, **kwargs)
+        return cls(dataframe, id_column=id_column)
 
 
 class AbstractMatrix(ABC):
