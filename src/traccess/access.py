@@ -326,12 +326,17 @@ class EquityComputer:
         # Count the number of people in poverty
         df = self.access.data.join(self.demographic.data)
         if is_dual == True:
-            df[df[access_column] > poverty_line][self.demographic.columns].sum()
+            return df[df[access_column] > poverty_line][self.demographic.columns].sum()
         else:
             return df[df[access_column] < poverty_line][self.demographic.columns].sum()
 
     def fgt_poverty(
-        self, access_column: str, poverty_line: float, alpha: float, is_dual=False
+        self,
+        access_column: str,
+        poverty_line: float,
+        alpha: float,
+        is_dual=False,
+        population_columns: list[str] | None = None,
     ) -> pandas.Series:
         """Compute a Foster-Greer-Thorbecke (FGT) index for all demographics.
 
@@ -359,6 +364,10 @@ class EquityComputer:
         is_dual: bool, optional
             Whether the measure is a dual measure, where lower values are
             better, by default False
+        population_columns : list[str], optional
+            The demographic columns to treat as population groups, by default
+            all of them. Use this when the demographic data also holds
+            non-count columns such as income.
 
         Returns
         -------
@@ -366,10 +375,11 @@ class EquityComputer:
             A series with an index for each demographic column, containing the
             specified measure.
         """
+        columns = self._population_columns(population_columns)
         df = self.access.data.join(self.demographic.data)
 
         # Keep the total of each population group
-        n = self.demographic.data.sum().rename("n")
+        n = self.demographic.data[columns].sum().rename("n")
 
         if is_dual == True:
             df["_delta"] = df[access_column] - poverty_line
@@ -380,10 +390,8 @@ class EquityComputer:
         df = df[df["_delta"] > 0]
         df["_delta"] = df["_delta"] / poverty_line
         df["_delta"] = df["_delta"].pow(alpha)
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(
-            df["_delta"], axis="index"
-        )
-        totals = df[self.demographic.columns].sum().rename("count")
+        df[columns] = df[columns].multiply(df["_delta"], axis="index")
+        totals = df[columns].sum().rename("count")
         totals = pandas.concat([totals, n], axis="columns")
         totals["fgt"] = totals["count"] / totals["n"]
 
@@ -425,13 +433,18 @@ class EquityComputer:
         )
         return df["poverty_index"]
 
-    def weighted_average(self, access_column: str) -> pandas.Series:
+    def weighted_average(
+        self, access_column: str, population_columns: list[str] | None = None
+    ) -> pandas.Series:
         """Compute the population group-weighted average access for all groups.
 
         Parameters
         ----------
         access_column : str
             The access value to weight
+        population_columns : list[str], optional
+            The demographic columns to treat as population groups, by default
+            all of them.
 
         Returns
         -------
@@ -439,15 +452,14 @@ class EquityComputer:
             A series with a row for demographic group, with the weighted average
             access.
         """
+        columns = self._population_columns(population_columns)
         df = self.access.data.join(self.demographic.data)
         # Normalize the population columns
-        for c in self.demographic.columns:
+        for c in columns:
             df[c] = df[c] / df[c].sum()
         # Multiply and sum
-        df[self.demographic.columns] = df[self.demographic.columns].multiply(
-            df[access_column], axis="index"
-        )
-        df = df[self.demographic.columns].sum()
+        df[columns] = df[columns].multiply(df[access_column], axis="index")
+        df = df[columns].sum()
         df = df.rename(access_column)
         return df
 
@@ -493,9 +505,298 @@ class EquityComputer:
 
         return pandas.Series(result, name=f"q{int(quantile * 100)}")
 
+    # --- Inequality measures -------------------------------------------------
+    #
+    # Ported from IPEA's R ``accessibility`` package (gini_index, theil_t,
+    # palma_ratio, concentration_index), computed once per population group:
+    # each group's counts are the weights. Results are Series indexed by
+    # population column, like weighted_average.
+
+    def _population_columns(self, population_columns: list[str] | None) -> list[str]:
+        if population_columns is None:
+            return list(self.demographic.columns)
+        missing = set(population_columns) - set(self.demographic.columns)
+        if missing:
+            raise ValueError(f"Not demographic columns: {sorted(missing)}")
+        return list(population_columns)
+
+    def _joined(self, access_column: str, extra_columns: list[str]) -> pandas.DataFrame:
+        df = self.access.data[[access_column]].join(self.demographic.data)
+        return df.dropna(subset=[access_column, *extra_columns])
+
+    def gini_index(
+        self, access_column: str, population_columns: list[str] | None = None
+    ) -> pandas.Series:
+        """Compute the Gini index of access for each population group.
+
+        The Gini index is one minus twice the area under the Lorenz curve of
+        population-weighted access: 0 when everyone has the same access, and
+        approaching 1 when all access is concentrated in one place.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to measure inequality over.
+        population_columns : list[str], optional
+            The demographic columns to use as population weights, by default
+            all of them.
+
+        Returns
+        -------
+        pandas.Series
+            The Gini index for each population group.
+        """
+        columns = self._population_columns(population_columns)
+        df = self._joined(access_column, []).sort_values(access_column, kind="stable")
+        access = df[access_column]
+
+        result = {}
+        for c in columns:
+            weights = df[c].fillna(0)
+            prop_pop = weights / weights.sum()
+            total_access = (weights * access).cumsum() / (weights * access).sum()
+            small_edge = total_access.shift(1, fill_value=0.0)
+            area = ((small_edge + total_access) * prop_pop / 2).sum()
+            result[c] = 1 - 2 * area
+        return pandas.Series(result, name="gini")
+
+    def theil_t(
+        self, access_column: str, population_columns: list[str] | None = None
+    ) -> pandas.Series:
+        """Compute the Theil T index of access for each population group.
+
+        Theil T is 0 when everyone has the same access and grows with
+        inequality, up to ln(n). As in the R ``accessibility`` package,
+        places with zero access are left out of the sum (ln 0 is undefined)
+        after the population-weighted average is computed over everyone.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to measure inequality over.
+        population_columns : list[str], optional
+            The demographic columns to use as population weights, by default
+            all of them.
+
+        Returns
+        -------
+        pandas.Series
+            The Theil T index for each population group.
+        """
+        columns = self._population_columns(population_columns)
+        df = self._joined(access_column, [])
+        result = {}
+        for c in columns:
+            weights = df[c].fillna(0)
+            average = numpy.average(df[access_column], weights=weights)
+            result[c] = _theil_t(df[access_column], average, weights)
+        return pandas.Series(result, name="theil_t")
+
+    def theil_t_decomposition(
+        self,
+        access_column: str,
+        group_column: str,
+        population_columns: list[str] | None = None,
+    ) -> pandas.DataFrame:
+        """Decompose the Theil T index into between- and within-group parts.
+
+        Places are split by ``group_column`` (a category such as income
+        decile, which must not itself be a population column). The total
+        equals ``between_group + within_group``.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to measure inequality over.
+        group_column : str
+            The demographic column whose values define the mutually exclusive
+            groups.
+        population_columns : list[str], optional
+            The demographic columns to use as population weights, by default
+            all of them except ``group_column``.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per population group, with ``between_group``,
+            ``within_group`` and ``total`` columns.
+        """
+        if population_columns is None:
+            population_columns = [
+                c for c in self.demographic.columns if c != group_column
+            ]
+        columns = self._population_columns(population_columns)
+        df = self._joined(access_column, [group_column])
+        access = df[access_column]
+
+        rows = {}
+        for c in columns:
+            weights = df[c].fillna(0)
+            average = numpy.average(access, weights=weights)
+            total_access = (weights * access).sum()
+            between_parts, between_weights, within = [], [], 0.0
+            for _, group in df.groupby(group_column):
+                w = weights.loc[group.index]
+                if w.sum() == 0:
+                    continue
+                group_average = numpy.average(group[access_column], weights=w)
+                group_access = (w * group[access_column]).sum()
+                within += _theil_t(group[access_column], group_average, w) * (
+                    group_access / total_access
+                )
+                between_parts.append(group_average)
+                between_weights.append(w.sum())
+            between = _theil_t(
+                pandas.Series(between_parts), average, pandas.Series(between_weights)
+            )
+            rows[c] = {
+                "between_group": between,
+                "within_group": within,
+                "total": between + within,
+            }
+        return pandas.DataFrame.from_dict(rows, orient="index")
+
+    def palma_ratio(
+        self,
+        access_column: str,
+        income_column: str,
+        population_columns: list[str] | None = None,
+    ) -> pandas.Series:
+        """Compute the Palma ratio of access for each population group.
+
+        The average access of the wealthiest 10% divided by that of the
+        poorest 40%, where "wealthiest" and "poorest" are set by
+        population-weighted quantiles of ``income_column``. Values above 1
+        mean the wealthy have better access.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to measure inequality over.
+        income_column : str
+            A demographic column of income per capita (not total income) for
+            each place, used to rank places.
+        population_columns : list[str], optional
+            The demographic columns to use as population weights, by default
+            all of them except ``income_column``.
+
+        Returns
+        -------
+        pandas.Series
+            The Palma ratio for each population group (NaN if either income
+            group is empty).
+        """
+        columns = self._population_columns(
+            population_columns
+            if population_columns is not None
+            else [c for c in self.demographic.columns if c != income_column]
+        )
+        df = self._joined(access_column, [income_column])
+        income = df[income_column]
+
+        result = {}
+        for c in columns:
+            weights = df[c].fillna(0)
+            q40 = _weighted_quantile(income, weights, 0.4)
+            q90 = _weighted_quantile(income, weights, 0.9)
+            poorest = income <= q40
+            wealthiest = income > q90
+            if weights[poorest].sum() == 0 or weights[wealthiest].sum() == 0:
+                result[c] = numpy.nan
+                continue
+            rich = numpy.average(df.loc[wealthiest, access_column], weights=weights[wealthiest])
+            poor = numpy.average(df.loc[poorest, access_column], weights=weights[poorest])
+            result[c] = rich / poor if poor != 0 else numpy.nan
+        return pandas.Series(result, name="palma_ratio")
+
+    def concentration_index(
+        self,
+        access_column: str,
+        income_column: str,
+        type: str = "standard",
+        population_columns: list[str] | None = None,
+    ) -> pandas.Series:
+        """Compute the concentration index of access for each population group.
+
+        Measures how much access inequality lines up with socioeconomic
+        status. Ranges from -1 to 1: positive values mean access is
+        concentrated among higher-income people (pro-rich), negative values
+        among lower-income people.
+
+        Parameters
+        ----------
+        access_column : str
+            The access column to measure inequality over.
+        income_column : str
+            A demographic column used to rank places from least to most
+            privileged: income per capita, or any numeric socioeconomic
+            status measure where higher means better off.
+        type : str, optional
+            ``"standard"`` (the relative index) or ``"corrected"`` (Erreygers,
+            2009), by default ``"standard"``.
+        population_columns : list[str], optional
+            The demographic columns to use as population weights, by default
+            all of them except ``income_column``.
+
+        Returns
+        -------
+        pandas.Series
+            The concentration index for each population group.
+        """
+        if type not in ("standard", "corrected"):
+            raise ValueError(f"type must be 'standard' or 'corrected', got {type!r}")
+        columns = self._population_columns(
+            population_columns
+            if population_columns is not None
+            else [c for c in self.demographic.columns if c != income_column]
+        )
+        df = self._joined(access_column, [income_column]).sort_values(
+            income_column, kind="stable"
+        )
+        access = df[access_column]
+
+        result = {}
+        for c in columns:
+            weights = df[c].fillna(0)
+            pop_share = weights / weights.sum()
+            # Fractional rank, eq. 4 of van Doorslaer & Koolman (2004).
+            rank = pop_share.cumsum().shift(1, fill_value=0.0) + pop_share / 2
+            average = numpy.average(access, weights=weights)
+            contribution = (rank - 0.5) * (access - average) * pop_share / average
+            index = 2 * contribution.sum()
+            if type == "corrected":
+                spread = access.max() - access.min()
+                index = index * 4 * average / spread if spread else numpy.nan
+            result[c] = index
+        return pandas.Series(result, name="concentration_index")
+
 
 def _get_nth(df, o, n, cost):
     df = df.sort_values(by=cost, ascending=True, na_position="last")
     df["_cumsum"] = df[o].cumsum()
     df = df[df["_cumsum"] >= n]
     return df[cost].min()
+
+
+def _theil_t(values: pandas.Series, average: float, weights: pandas.Series) -> float:
+    """Weighted mean of (x / avg) ln(x / avg) over positive values, as in the
+    R accessibility package's calc_theil_t (zero values are dropped)."""
+    values = pandas.Series(values).reset_index(drop=True)
+    weights = pandas.Series(weights).reset_index(drop=True)
+    positive = values > 0
+    if not positive.any() or weights[positive].sum() == 0:
+        return float("nan")
+    ratio = values[positive] / average
+    return float(numpy.average(ratio * numpy.log(ratio), weights=weights[positive]))
+
+
+def _weighted_quantile(values: pandas.Series, weights: pandas.Series, q: float) -> float:
+    """Population-weighted quantile: the smallest value whose cumulative
+    weight share reaches q."""
+    order = numpy.argsort(values.to_numpy(), kind="stable")
+    sorted_values = values.to_numpy()[order]
+    cumulative = numpy.cumsum(weights.to_numpy()[order])
+    if cumulative[-1] == 0:
+        return float("nan")
+    index = numpy.searchsorted(cumulative / cumulative[-1], q, side="left")
+    return float(sorted_values[min(index, len(sorted_values) - 1)])
